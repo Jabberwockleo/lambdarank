@@ -28,7 +28,7 @@ During training, $\bar{P}_{ij}$ is labeled as
 \startformula
 \bar{P_{ij}} = \frac{1}{2}(1 + S_{ij})
 \stopformula
-$S_{ij} = 1$If document $i$ is more relevant than document $j$, vise versa.
+$S_{ij} = 1$ if document $i$ is more relevant than document $j$, vise versa.
 
 Thus,
 \startformula
@@ -46,7 +46,7 @@ The gradient in RankNet is
             +
         \frac{\partial C_{ij}}{\partial s_j}\frac{\partial s_j}{\partial w_k}
 \stopformula
-In which,
+In which
 \startformula
 \frac{\partial C_{ij}}{\partial s_i} = \frac12 (1 - S_{ij})\sigma - \frac{\sigma}{1 + e^{\sigma(s_i - s_j)}} = -\frac{\partial C_{ij}}{\partial s_j}
 \stopformula
