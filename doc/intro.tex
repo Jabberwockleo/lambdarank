@@ -1,0 +1,80 @@
+\setuplayout[topspace=0.5in, backspace=0.5in, header=24pt, footer=36pt,
+  height=middle, width=middle]
+\setupfooter[style=\it]
+\setupfootertexts[\hfill https://github.com/Jabberwockleo]
+\setuppagenumbering[location={header,right}]
+\setupbodyfont[11pt]
+
+\starttext
+
+\title{LambdaRank}
+LambdaRank and successive LambdaMART are series of ranking algorithms developed by Burges and his colleagues based on RankNet.
+
+LambdaRank directly assigns gradients to parameters. Such factorization can be regarded as kind of designed batch normalization in neural networks. And LambdaMART models the gradient updates using gradient boosting trees.
+
+\subject{Model}
+Recall the RankNet cost function C
+\startformula
+C_{ij} = - \bar{P}_{ij}o_{ij} + \log(1 + e^{o_{ij}}) = (1 - \bar{P}_{ij})o_{ij} + \log(1 + e^{-o_{ij}})
+\stopformula
+Denoted
+\startformula
+o_{ij}=\sigma(s_i - s_j)
+\stopformula
+\startformula
+P_{ij} = P(x_i \rhd x_j) = \frac{e^{\sigma(s_i - s_j)}}{1 + e^{\sigma(s_i - s_j)}} = \frac{1}{1 + e^{-\sigma(s_i - s_j)}}
+\stopformula
+During training, $\bar{P}_{ij}$ is labeled as
+\startformula
+\bar{P_{ij}} = \frac{1}{2}(1 + S_{ij})
+\stopformula
+$S_{ij} = 1$If document $i$ is more relevant than document $j$, vise versa.
+
+Thus,
+\startformula
+C_{ij} =
+    \frac{1}{2}(1 - S_{ij})\sigma(s_i - s_j) + \log(1 + e^{-\sigma(s_i - s_j)})
+\stopformula
+Denote the model parameters as $w_k$.
+
+The gradient in RankNet is
+\startformula
+\frac{\partial C}{\partial w_k} =
+    \sum_{(i, j) \in P}\frac{\partial C_{ij}}{\partial w_k} =
+    \sum_{(i, j) \in P}
+        \frac{\partial C_{ij}}{\partial s_i}\frac{\partial s_i}{\partial w_k}
+            +
+        \frac{\partial C_{ij}}{\partial s_j}\frac{\partial s_j}{\partial w_k}
+\stopformula
+In which,
+\startformula
+\frac{\partial C_{ij}}{\partial s_i} = \frac12 (1 - S_{ij})\sigma - \frac{\sigma}{1 + e^{\sigma(s_i - s_j)}} = -\frac{\partial C_{ij}}{\partial s_j}
+\stopformula
+Thus,
+\startformula
+\frac{\partial C}{\partial w_k} =  
+        \sum_{(i, j) \in P}
+        (\frac12 (1 - S_{ij})\sigma - \frac{\sigma}{1 + e^{\sigma(s_i - s_j)}})
+        (\frac{\partial s_i}{\partial w_k} - \frac{\partial s_j}{\partial w_k})
+\stopformula
+Denoted (if $(i, j) \in P$ then $S_{ij} = 1$)
+\startformula
+\lambda_{ij} = \frac{\partial C_{ij}}{\partial s_i} = - \frac{\sigma}{1 + e^{\sigma(s_i - s_j)}}
+\stopformula
+Gives
+\startformula
+\frac{\partial C}{\partial w_k} =
+        \sum_{(i, j) \in P}
+        \lambda_{ij}
+        (\frac{\partial s_i}{\partial w_k} - \frac{\partial s_j}{\partial w_k}) =
+        \sum_{(i, j) \in P} \lambda_i \frac{\partial s_i}{\partial w_k}
+\stopformula
+In which (the core of LambdaRank),
+\startformula
+\lambda_{i} = \sum_{(i, j) \in P}\lambda_{ij} - \sum_{(j, i) \in P}\lambda_{ij}.
+\stopformula
+The gradient descent problem factorized as $\lambda_i$ is accumulated of $\lambda_{ij}$.
+
+This can be viewed as kind of mini-batch learning, where all the weight updates are first computed for a given query, and then applied, instead of doing stochastic gradient decent updates for each document pair.
+
+\stoptext
