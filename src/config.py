@@ -12,13 +12,20 @@ Author: Wan Li
 Date: 2017/11/27 10:41:01
 """
 
+LAMBDA_MEASURE_MRR = "mean_reciprocal_rank"
+LAMBDA_MEASURE_MAP = "mean_average_precision"
+LAMBDA_MEASURE_MAP = "expected_reciprocal_rank"
+LAMBDA_MEASURE_NDCG = "normalized_discounted_cumulative_gain"
+LAMBDA_MEASURE_AUC = "factorized_pairwise_precision"
+
+DEBUG_LOG = True
+QUALITY_MEASURE = LAMBDA_MEASURE_NDCG
 USE_HIDDEN_LAYER = True
 USE_TOY_DATA = True
 LAYER_WIDTH = 10
 FEATURE_NUM = 2
 LEARNING_RATE = 0.01
-TRAIN_BATCH_SIZE = 30
-MODEL_PATH = "./model_ranknet.ckpt"
+MODEL_PATH = "./model_lambdarank.ckpt"
 TRAIN_DATA = "./labeled.train"
 TEST_DATA = "./labeled.test"
 PREDICT_RESULT = "./labeled.predict"
