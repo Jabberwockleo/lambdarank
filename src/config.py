@@ -17,9 +17,10 @@ LAMBDA_MEASURE_MAP = "mean_average_precision"
 LAMBDA_MEASURE_MAP = "expected_reciprocal_rank"
 LAMBDA_MEASURE_NDCG = "normalized_discounted_cumulative_gain"
 LAMBDA_MEASURE_AUC = "factorized_pairwise_precision"
+NO_LAMBDA_MEASURE_USING_SGD = "pure_sgd"
 
 DEBUG_LOG = True
-QUALITY_MEASURE = LAMBDA_MEASURE_NDCG
+QUALITY_MEASURE = NO_LAMBDA_MEASURE_USING_SGD
 USE_HIDDEN_LAYER = True
 USE_TOY_DATA = True
 LAYER_WIDTH = 10

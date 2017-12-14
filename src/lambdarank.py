@@ -56,13 +56,15 @@ with tf.name_scope("matrices"):
     Pij_hat = 1.0 / 2.0 * (1 + Sij)
 
     # the cost function
-    # Cij = −P ̄ijoij + log(1 + eoij ) = (1 − P ̄ij)oij + log(1 + e−oij )
+    # Cij = −P ̄ijoij + log(1 + eoij) = (1 − P ̄ij)oij + log(1 + e−oij)
     # can be rearrange as
-    # Cij ≡C(oij)=−P ̄ijlogPij−(1−P ̄ij)log(1−Pij)
+    # Cij ≡ C(oij) = −P ̄ijlogPij − (1 − P ̄ij)log(1 − Pij)
     loss_matrix = tf.nn.sigmoid_cross_entropy_with_logits(
         logits=sigma_ij, labels=Pij_hat)
-    loss = tf.reduce_mean(loss_matrix)
 
 with tf.name_scope("train_op"):
-    train_op = tf.train.GradientDescentOptimizer(config.LEARNING_RATE).minimize(loss)
+    if config.QUALITY_MEASURE == config.NO_LAMBDA_MEASURE_USING_SGD:
+        loss = tf.reduce_mean(loss_matrix)
+        train_op = tf.train.GradientDescentOptimizer(
+            config.LEARNING_RATE).minimize(loss)
 
