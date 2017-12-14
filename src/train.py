@@ -52,7 +52,7 @@ with tf.Session() as sess:
     sess.run(init)
 
     query_doc_index = 0
-    for epoch in range(0, 1):
+    for epoch in range(0, 10000):
         X, Y = [[], []], [[], []]
         # get next query_doc list by a query
         query_doc_index += 1
@@ -73,12 +73,12 @@ with tf.Session() as sess:
                         lambdarank.sigma_ij,
                         lambdarank.Sij],
                        feed_dict={lambdarank.X:X, lambdarank.Y:Y})
-        print "-- epoch[%d] loss[%f] -- " % (
-            epoch,
-            loss,
-        )
+            print "-- epoch[%d] loss[%f] -- " % (
+                epoch,
+                loss,
+            )
 
-        if config.DEBUG_LOG == True:
+        if epoch % 500 == 0 and config.DEBUG_LOG == True:
             print "X:\n", debug_X
             print "Y:\n", debug_Y
             print "y:\n", debug_y

@@ -30,6 +30,23 @@ test_data_key_count = len(test_data_keys)
 
 fpred = open(config.PREDICT_RESULT, "w")
 
+def convert_np_data(query_doc_list):
+    """Convert query doc list to numpy data of one retrival
+
+    Args:
+        query_doc_list: list of list: [score, f1, f2 , ..., fn]
+
+    Return:
+        X, Y: [feature_vec], [label]
+    """
+    x = []
+    y = []
+    for qd in query_doc_list:
+        x.append(qd[1:])
+        y.append(qd[:1])
+
+    return np.array(x), np.array(y)
+
 saver = tf.train.Saver()
 with tf.Session() as sess:
     init = tf.global_variables_initializer()
@@ -43,49 +60,31 @@ with tf.Session() as sess:
     for idx in xrange(test_data_key_count):
         qid = test_data_keys[idx]
         doc_list = test_data[qid]
-        if True:
-            # pairwise evaluation
-            X, Y = mock.calc_query_doc_pairwise_data(doc_list)
-            # convert to graph input structure
-            X, Y = (np.array(X[0]), np.array(X[1])), (np.array(Y[0]), np.array(Y[1]))
-            o1, o2, O1, O2 = sess.run([lambdarank.o1, lambdarank.o2, lambdarank.O1, lambdarank.O2],
-                    feed_dict={lambdarank.X1:X[0], lambdarank.X2:X[1], lambdarank.O1:Y[0], lambdarank.O2:Y[1]})
-            a = (o1 - o2)
-            b = (O1 - O2)
-            s = np.sign(a * b)
-            falsepositive_pairs_count += (s.shape[0] - np.sum(s)) / 2
-            total_pairs_count += s.shape[0]
-        if True:
-            # rank evaluation
-            X, Y = [], []
-            for query_doc_vec in doc_list:
-                X.append(query_doc_vec[1:])
-                Y.append(query_doc_vec[0:1])
-            X, Y = np.array(X), np.array(Y)
-            o, O = sess.run([lambdarank.o1, lambdarank.O1], feed_dict={lambdarank.X1:X, lambdarank.O1:Y})
-            true_label_index = 0
-            positive_label_index = 0
-            max_true_value = -10000.0
-            max_positive_value = -10000.0
-            for i in xrange(o.shape[0]):
-                if O[i] > max_true_value:
-                    max_true_value = O[i]
-                    true_label_index = i
-                if o[i] > max_positive_value:
-                    max_positive_value = o[i]
-                    positive_label_index = i
-            result_label = "true_positive"
-            if true_label_index != positive_label_index:
-                result_label = "falsepositive"
-                falsepositive_rank_count += 1
-            for i in xrange(o.shape[0]):
-                fpred.write("%s\t%.2f\t%.2f\t%s\n" % (result_label, o[i], O[i], qid))
+        # rank evaluation
+        X, Y = [], []
+        for query_doc_vec in doc_list:
+            X.append(query_doc_vec[1:])
+            Y.append(query_doc_vec[0:1])
+        X, Y = np.array(X), np.array(Y)
+        O, o = sess.run([lambdarank.Y, lambdarank.y], feed_dict={lambdarank.X:X, lambdarank.Y:Y})
+        true_label_index = 0
+        positive_label_index = 0
+        max_true_value = -10000.0
+        max_positive_value = -10000.0
+        for i in xrange(o.shape[0]):
+            if O[i] > max_true_value:
+                max_true_value = O[i]
+                true_label_index = i
+            if o[i] > max_positive_value:
+                max_positive_value = o[i]
+                positive_label_index = i
+        result_label = "true_positive"
+        if true_label_index != positive_label_index:
+            result_label = "falsepositive"
+            falsepositive_rank_count += 1
+        for i in xrange(o.shape[0]):
+            fpred.write("%s\t%.2f\t%.2f\t%s\n" % (result_label, o[i], O[i], qid))
 
-    print "-- pairwise precision [%d/%d = %f] -- " % (
-            total_pairs_count - falsepositive_pairs_count,
-            total_pairs_count,
-            1.0 - falsepositive_pairs_count / total_pairs_count
-    )
     print "-- rank precision [%d/%d = %f] -- " % (
             total_queries_count - falsepositive_rank_count,
             total_queries_count,
