@@ -52,7 +52,7 @@ with tf.Session() as sess:
     sess.run(init)
 
     query_doc_index = 0
-    for epoch in range(0, 10000):
+    for epoch in range(0, 2000):
         X, Y = [[], []], [[], []]
         # get next query_doc list by a query
         query_doc_index += 1
@@ -65,13 +65,15 @@ with tf.Session() as sess:
         if epoch % 100 == 0:
             loss, \
                     debug_X, debug_Y, debug_y,\
-                    debug_sigma_ij, debug_Sij = \
+                    debug_sigma_ij, debug_Sij, debug_lambda_ij = \
                     sess.run([lambdarank.loss,
                         lambdarank.X,
                         lambdarank.Y,
                         lambdarank.y,
                         lambdarank.sigma_ij,
-                        lambdarank.Sij],
+                        lambdarank.Sij,
+                        lambdarank.lambda_ij,
+                        ],
                        feed_dict={lambdarank.X:X, lambdarank.Y:Y})
             print "-- epoch[%d] loss[%f] -- " % (
                 epoch,
@@ -84,5 +86,6 @@ with tf.Session() as sess:
             print "y:\n", debug_y
             print "sigma_ij:\n", debug_sigma_ij
             print "Sij:\n", debug_Sij
+            print "lambda_ij:\n", debug_lambda_ij
     save_path = saver.save(sess, config.MODEL_PATH)
     print("Model saved in file: %s" % save_path)
