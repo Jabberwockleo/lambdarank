@@ -78,7 +78,7 @@ with tf.Session() as sess:
                 loss,
             )
 
-        if epoch % 500 == 0 and config.DEBUG_LOG == True:
+        if epoch % 1000 == 0 and config.DEBUG_LOG == True:
             print "X:\n", debug_X
             print "Y:\n", debug_Y
             print "y:\n", debug_y
