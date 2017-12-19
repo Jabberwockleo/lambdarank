@@ -28,29 +28,45 @@ biases = {
         "linear": tf.Variable(tf.random_normal([1]), name="b_linear"),
 }
 
-layer_params = []
-
 with tf.name_scope("mlp"):
+    layer_params = []
     with tf.name_scope("input"):
         X = tf.placeholder(tf.float32, [None, config.FEATURE_NUM], name="X")
         Y = tf.placeholder(tf.float32, [None, 1], name="Y")
-    if config.USE_HIDDEN_LAYER == True:
-        with tf.name_scope("hidden_layer"):
-            layer_h1 = tf.add(tf.matmul(X, weights["hidden"]), biases["hidden"])
-            layer_params.append(weights["hidden"])
-            layer_params.append(biases["hidden"])
-            layer_h1 = tf.nn.relu(layer_h1)
-        with tf.name_scope("out_layer"):
-            y = tf.add(tf.matmul(layer_h1, weights["out"]), biases["out"])
-            layer_params.append(weights["out"])
-            layer_params.append(biases["out"])
-    else:
-        with tf.name_scope("linear_layer"):
-            y = tf.add(tf.matmul(X, weights["linear"]), biases["linear"])
-            layer_params.append(weights["linear"])
-            layer_params.append(biases["linear"])
+    def compute_graph(X):
+        """ Build compute graph
+
+        define a function for computing ds_i/dw_k respectively,
+            as the tf.gradient() computes sum_{k} dy_k/dx_i w.r.t x_i
+
+        Args:
+            X: the input feature vector tensor shaped [None, x_i]
+        Returns:
+            y: the output predict tensor shaped [None, y_i]
+            layer_params: list of params of params in all layers.
+                One layer may contain multiple lists, such as
+                weight_1 = [w_1, w_2, .., w_n] bias_1 = [w_n+1, .., w_p]
+                weight_2 = [w_p+1, ...]
+        """
+        if config.USE_HIDDEN_LAYER == True:
+            with tf.name_scope("hidden_layer"):
+                layer_h1 = tf.add(tf.matmul(X, weights["hidden"]), biases["hidden"])
+                layer_params.append(weights["hidden"])
+                layer_params.append(biases["hidden"])
+                layer_h1 = tf.nn.relu(layer_h1)
+            with tf.name_scope("out_layer"):
+                y = tf.add(tf.matmul(layer_h1, weights["out"]), biases["out"])
+                layer_params.append(weights["out"])
+                layer_params.append(biases["out"])
+        else:
+            with tf.name_scope("linear_layer"):
+                y = tf.add(tf.matmul(X, weights["linear"]), biases["linear"])
+                layer_params.append(weights["linear"])
+                layer_params.append(biases["linear"])
+        return y, layer_params
 
 with tf.name_scope("matrices"):
+    y, _ = compute_graph(X)
     # score diff matrix with shape [doc_count, doc_count]
     # sigma_ij = matrix of sigma(s_i - s_j)
     #     in default RankNet, sigma = Identity, s_i = f(xi)
