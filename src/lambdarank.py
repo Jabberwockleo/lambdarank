@@ -29,12 +29,30 @@ biases = {
 }
 
 with tf.name_scope("mlp"):
-    layer_params = []
     with tf.name_scope("input"):
         X = tf.placeholder(tf.float32, [None, config.FEATURE_NUM], name="X")
         Y = tf.placeholder(tf.float32, [None, 1], name="Y")
+
+    def graph_params():
+        """Get layer params in array
+
+        Returns:
+            layer_params: list of params of params in all layers.
+                One layer may contain multiple lists, such as
+                weight_1 = [w_1, w_2, .., w_n] bias_1 = [w_n+1, .., w_p]
+                weight_2 = [w_p+1, ...]
+        """
+        layer_params = []
+        if config.USE_HIDDEN_LAYER == True:
+            layer_params.append((weights["hidden"], biases["hidden"]))
+            layer_params.append((weights["out"], biases["out"]))
+        else:
+            layer_params.append((weights["linear"], biases["linear"]))
+        return layer_params
+
+
     def compute_graph(X):
-        """ Build compute graph
+        """Build compute graph
 
         define a function for computing ds_i/dw_k respectively,
             as the tf.gradient() computes sum_{k} dy_k/dx_i w.r.t x_i
@@ -43,30 +61,20 @@ with tf.name_scope("mlp"):
             X: the input feature vector tensor shaped [None, x_i]
         Returns:
             y: the output predict tensor shaped [None, y_i]
-            layer_params: list of params of params in all layers.
-                One layer may contain multiple lists, such as
-                weight_1 = [w_1, w_2, .., w_n] bias_1 = [w_n+1, .., w_p]
-                weight_2 = [w_p+1, ...]
         """
         if config.USE_HIDDEN_LAYER == True:
             with tf.name_scope("hidden_layer"):
                 layer_h1 = tf.add(tf.matmul(X, weights["hidden"]), biases["hidden"])
-                layer_params.append(weights["hidden"])
-                layer_params.append(biases["hidden"])
                 layer_h1 = tf.nn.relu(layer_h1)
             with tf.name_scope("out_layer"):
                 y = tf.add(tf.matmul(layer_h1, weights["out"]), biases["out"])
-                layer_params.append(weights["out"])
-                layer_params.append(biases["out"])
         else:
             with tf.name_scope("linear_layer"):
                 y = tf.add(tf.matmul(X, weights["linear"]), biases["linear"])
-                layer_params.append(weights["linear"])
-                layer_params.append(biases["linear"])
-        return y, layer_params
+        return y
 
 with tf.name_scope("matrices"):
-    y, _ = compute_graph(X)
+    y = compute_graph(X)
     # score diff matrix with shape [doc_count, doc_count]
     # sigma_ij = matrix of sigma(s_i - s_j)
     #     in default RankNet, sigma = Identity, s_i = f(xi)
@@ -113,12 +121,62 @@ with tf.name_scope("train_op"):
         ji_sum = tf.reduce_sum(ij_sum_mat, [0])
         lambda_i = ij_sum - ji_sum
 
-        t = tf.shape(lambda_i)
+        # unpack X on dimension 0 and computes gradients w.r.t x_i,
+        # resulting on a tensor R with R.shape[0] = X.shape[0]
+        # because tf.gradients(Y, X) computes sum_{k} dy_k/dx_i
+        # we want ds_i/dw_k, i.e. dg(x_i)/dw_k
+        # thus we need to compute s_i and w_k respectively
+        def make_dsi_dwk_closure(w_k):
+            """Make a closure w.r.t wk
 
-        # list of ds_i/dw_k
-        ds_i_dw_k = tf.gradients(y, layer_params)
+            Args:
+                w_k: respected to which gradient is computed
+            Returns:
+                a function passed to tf.map_fn() which accept x_i
+            """
+            def compute_dsi_dwk(x_i):
+                """Compute gradient of graph(x_i) w.r.t w_k
 
-        t = [tf.shape(x) for x in ds_i_dw_k]
+                Args:
+                    x_i: single input feature vector
+                Returns:
+                    a single tensor representing gradient ds_i/dw_k
+                """
+                xi_mat = tf.expand_dims(x_i, 0)
+                return tf.gradients(compute_graph(xi_mat), [w_k])[0]
+            return compute_dsi_dwk
+
+
+        # flatten params of layer params
+        layer_params = graph_params()
+        wk_arr = [wk for w_b in layer_params for wk in w_b]
+
+        # computes [None, gradient] matrix of ds_i/dw_k
+        def compute_ds_dwk(w_k):
+            """Compute [ds_1/dw_k, ds_2/dw_k, ..] mat
+
+            Args:
+                w_k: a node param to compute
+            Returns:
+                a [None, gradient] tensor
+            """
+            dsi_dwk_mat = tf.map_fn(make_dsi_dwk_closure(w_k), X)
+            return dsi_dwk_mat
+
+        # compute gradients dC/dw_k
+        dC_dwk_arr = []
+        ds_dwk_arr = []
+        for wk in wk_arr:
+            # ds_dwk for hidden layer param shaped [N, feature_num, layer_width]
+            # ds_dwk for output layer param shaped [N, feature_num]
+            ds_dwk = compute_ds_dwk(wk)
+            ds_dwk_arr.append(ds_dwk)
+
+
+        t = compute_ds_dwk(wk_arr[-2])
+        #t = tf.squeeze(t)
+        #t = tf.shape(t)
+
 
        # # gradient
        # gradient = tf.expand_dims(lambda_i, 0) * ds_i_dw_k
