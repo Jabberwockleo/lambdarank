@@ -103,24 +103,24 @@ with tf.name_scope("matrices"):
     Cij = tf.nn.sigmoid_cross_entropy_with_logits(
         logits=sigma_ij, labels=Pij_hat)
 
+    # dC/dw_k = \sum{lambda_ij * (ds_i/dw_k - ds_j/dw_k)}
+    #    = \sum{lambda_i * ds_i/dw_k}
+    # lambda_i is the coefficiency of dC/dw_k
+    # which is factorized as lambda_i = \sum_{if Sij = 1}{lambda_ij} -
+    #    \sum_{if Sji = 1}{lambda_ji}
+    ij_positive_label_mat = tf.maximum(Sij, 0) #Mij = 1 if (i, j) \in P
+    ij_sum_mat = ij_positive_label_mat * lambda_ij
+    ij_sum = tf.reduce_sum(ij_sum_mat, [1])
+    ji_sum = tf.reduce_sum(ij_sum_mat, [0])
+    lambda_i = ij_sum - ji_sum
+
 with tf.name_scope("train_op"):
     t = tf.constant(0) # debug variable
+    loss = tf.reduce_mean(Cij)
     if config.QUALITY_MEASURE == config.NO_LAMBDA_MEASURE_USING_SGD:
-        loss = tf.reduce_mean(Cij)
         train_op = tf.train.GradientDescentOptimizer(
             config.LEARNING_RATE).minimize(loss)
     elif config.QUALITY_MEASURE == config.LAMBDA_MEASURE_AUC:
-        # dC/dw_k = \sum{lambda_ij * (ds_i/dw_k - ds_j/dw_k)}
-        #    = \sum{lambda_i * ds_i/dw_k}
-        # lambda_i is the coefficiency of dC/dw_k
-        # which is factorized as lambda_i = \sum_{if Sij = 1}{lambda_ij} -
-        #    \sum_{if Sji = 1}{lambda_ji}
-        ij_positive_label_mat = tf.maximum(Sij, 0) #Mij = 1 if (i, j) \in P
-        ij_sum_mat = ij_positive_label_mat * lambda_ij
-        ij_sum = tf.reduce_sum(ij_sum_mat, [1])
-        ji_sum = tf.reduce_sum(ij_sum_mat, [0])
-        lambda_i = ij_sum - ji_sum
-
         # unpack X on dimension 0 and computes gradients w.r.t x_i,
         # resulting on a tensor R with R.shape[0] = X.shape[0]
         # because tf.gradients(Y, X) computes sum_{k} dy_k/dx_i
@@ -165,35 +165,25 @@ with tf.name_scope("train_op"):
 
         # compute gradients dC/dw_k
         dC_dwk_arr = []
-        ds_dwk_arr = []
         for wk in wk_arr:
             # ds_dwk for hidden layer param shaped [N, feature_num, layer_width]
             # ds_dwk for output layer param shaped [N, feature_num]
             ds_dwk = compute_ds_dwk(wk)
-            ds_dwk_arr.append(ds_dwk)
+            # dC/dwk is \sum_{i} lambda_i * ds_i/dwk
+            lambdai_dsi_dwk = tf.map_fn(lambda x: x[0] * x[1],
+                    (ds_dwk, tf.expand_dims(lambda_i, 1)), dtype=tf.float32)
+            dC_dwk = tf.reduce_sum(lambdai_dsi_dwk, axis=[0])
+            dC_dwk_arr.append(dC_dwk)
 
+        # flattened
+        flat_wk = wk_arr[:]
+        flat_grad = dC_dwk_arr[:]
 
-        t = compute_ds_dwk(wk_arr[-2])
-        #t = tf.squeeze(t)
-        #t = tf.shape(t)
-
-
-       # # gradient
-       # gradient = tf.expand_dims(lambda_i, 0) * ds_i_dw_k
-
-       # # flattened
-       # flat_wk = [wk for pk in layer_params for wk in pk]
-       # flat_grad = [gk for pk in gradient for gk in pk]
-
-        # mocked
-        loss = tf.reduce_mean(Cij)
+        # apply gradients
         train_op = tf.train.GradientDescentOptimizer(
-            config.LEARNING_RATE).minimize(loss)
-       # apply gradients
-       # train_op = tf.train.GradientDescentOptimizer(
-       #     config.LEARNING_RATE).apply_gradients(
-       #         [(gr, wk) for gr, wk in zip(flat_grad, flat_wk)]
-       #     )
+            config.LEARNING_RATE).apply_gradients(
+                [(gr, wk) for gr, wk in zip(flat_grad, flat_wk)]
+            )
         pass
     elif config.QUALITY_MEASURE == config.LAMBDA_MEASURE_NDCG:
         # TODO
