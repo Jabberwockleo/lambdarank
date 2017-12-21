@@ -52,7 +52,7 @@ with tf.Session() as sess:
     sess.run(init)
 
     query_doc_index = 0
-    for epoch in range(0, 5000):
+    for epoch in range(0, 1):
         X, Y = [[], []], [[], []]
         # get next query_doc list by a query
         query_doc_index += 1

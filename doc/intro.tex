@@ -77,4 +77,21 @@ The gradient descent problem factorized as $\lambda_i$ is accumulated of $\lambd
 
 This can be viewed as kind of mini-batch learning, where all the weight updates are first computed for a given query, and then applied, instead of doing stochastic gradient decent updates for each document pair.
 
+\subject{Strategy}
+
+By factorizing the $\lambda_i$ we can directly computes the gradient of the cost function $C$ w.r.t. $w_k$, by combine the weight coefficients (which is exactly $\lambda_i$) for each gradient for $s_i$ w.r.t. $w_k$.
+
+
+Simply factorize $\lambda_i$ is the basic version of LambdaRank.
+
+
+By replacing $\lambda_i$ with other quality measure (such as NDCG) gives the extended version of LambdaRank.
+
+
+By both modeling $\lambda_i$ and $\frac{\partial s_i}{\partial w_k}$ such as GBDT gives the LambdaRank variants such as LambdaMART.
+
+\subject{Algorithm}
+
+Iteratively feed sets of documents retrieved by the same query to minimize the cost function.
+
 \stoptext

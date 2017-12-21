@@ -112,7 +112,7 @@ with tf.name_scope("matrices"):
     ij_sum_mat = ij_positive_label_mat * lambda_ij
     ij_sum = tf.reduce_sum(ij_sum_mat, [1])
     ji_sum = tf.reduce_sum(ij_sum_mat, [0])
-    lambda_i = ij_sum - ji_sum
+    lambda_i = ij_sum - ji_sum #lambda_i for \sum_{i}dCij/dsi - \sum_{i}dCji/dsj
 
 with tf.name_scope("train_op"):
     t = tf.constant(0) # debug variable
