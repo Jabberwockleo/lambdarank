@@ -32,6 +32,7 @@ with tf.name_scope("mlp"):
     with tf.name_scope("input"):
         X = tf.placeholder(tf.float32, [None, config.FEATURE_NUM], name="X")
         Y = tf.placeholder(tf.float32, [None, 1], name="Y")
+        Y_sort = tf.placeholder(tf.float32, [None, 1], name="Y_sort")
 
     def graph_params():
         """Get layer params in array
@@ -116,6 +117,7 @@ with tf.name_scope("matrices"):
 
 with tf.name_scope("train_op"):
     t = tf.constant(0) # debug variable
+    tt = tf.constant(0) # debug variable
     loss = tf.reduce_mean(Cij)
     if config.QUALITY_MEASURE == config.NO_LAMBDA_MEASURE_USING_SGD:
         train_op = tf.train.GradientDescentOptimizer(
@@ -187,5 +189,26 @@ with tf.name_scope("train_op"):
         pass
     elif config.QUALITY_MEASURE == config.LAMBDA_MEASURE_NDCG:
         # TODO
+        relevance = tf.maximum(Y, 0)
+        relevance_sort = tf.maximum(Y_sort, 0)
+        ranks = tf.cast(tf.range(1, tf.shape(Y)[0] + 1, 1), dtype=tf.float32)
+        ranks = tf.expand_dims(ranks, [1]) # column vector
+
+        # DCG(t) = \sum^(t)_{1}
+        def log2(x):
+            """Compute log(x)/log(2)
+            """
+            return tf.log(x)/tf.log(tf.constant(2.0))
+        dcg = (2 ** relevance - 1) / log2(ranks + 1)
+        dcg = tf.reduce_sum(dcg)
+        max_dcg =(2 ** relevance_sort - 1) / log2(ranks + 1)
+        max_dcg = tf.reduce_sum(max_dcg)
+
+        t = dcg
+        tt = max_dcg
+
+        # mock
+        train_op = tf.train.GradientDescentOptimizer(
+            config.LEARNING_RATE).minimize(loss)
         pass
 

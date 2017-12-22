@@ -61,13 +61,18 @@ with tf.Session() as sess:
         doc_list = train_data[key]
         # convert to graph input structure
         X, Y = convert_np_data(doc_list)
-        sess.run(lambdarank.train_op, feed_dict={lambdarank.X:X, lambdarank.Y:Y})
+        Y_sort = np.sort(Y, axis=0)[::-1]
+        sess.run(lambdarank.train_op, feed_dict={
+            lambdarank.X:X,
+            lambdarank.Y:Y,
+            lambdarank.Y_sort:Y_sort
+        })
         if epoch % 100 == 0:
             loss, \
                     debug_X, debug_Y, debug_y,\
                     debug_sigma_ij, debug_Sij, debug_lambda_ij,\
                     debug_lambda_i,\
-                    debug_t = \
+                    debug_t, debug_tt = \
                     sess.run([lambdarank.loss,
                         lambdarank.X,
                         lambdarank.Y,
@@ -76,9 +81,14 @@ with tf.Session() as sess:
                         lambdarank.Sij,
                         lambdarank.lambda_ij,
                         lambdarank.lambda_i,
-                        lambdarank.t
+                        lambdarank.t,
+                        lambdarank.tt
                         ],
-                       feed_dict={lambdarank.X:X, lambdarank.Y:Y})
+                       feed_dict={
+                           lambdarank.X:X,
+                           lambdarank.Y:Y,
+                           lambdarank.Y_sort:Y_sort
+                       })
             print "-- epoch[%d] loss[%f] -- " % (
                 epoch,
                 loss,
@@ -88,10 +98,11 @@ with tf.Session() as sess:
             print "X:\n", debug_X
             print "Y:\n", debug_Y
             print "y:\n", debug_y
-            print "sigma_ij:\n", debug_sigma_ij
-            print "Sij:\n", debug_Sij
-            print "lambda_ij:\n", debug_lambda_ij
-            print "lambda_i:\n", debug_lambda_i
+#            print "sigma_ij:\n", debug_sigma_ij
+#            print "Sij:\n", debug_Sij
+#            print "lambda_ij:\n", debug_lambda_ij
+#            print "lambda_i:\n", debug_lambda_i
             print "t:\n", debug_t
+            print "t:\n", debug_tt
     save_path = saver.save(sess, config.MODEL_PATH)
     print("Model saved in file: %s" % save_path)
