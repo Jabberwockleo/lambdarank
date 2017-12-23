@@ -52,7 +52,7 @@ with tf.Session() as sess:
     sess.run(init)
 
     query_doc_index = 0
-    for epoch in range(0, 1):
+    for epoch in range(0, 5000):
         X, Y = [[], []], [[], []]
         # get next query_doc list by a query
         query_doc_index += 1
@@ -72,7 +72,7 @@ with tf.Session() as sess:
                     debug_X, debug_Y, debug_y,\
                     debug_sigma_ij, debug_Sij, debug_lambda_ij,\
                     debug_lambda_i,\
-                    debug_t, debug_tt = \
+                    debug_t, debug_tt, debug_ttt = \
                     sess.run([lambdarank.loss,
                         lambdarank.X,
                         lambdarank.Y,
@@ -82,7 +82,8 @@ with tf.Session() as sess:
                         lambdarank.lambda_ij,
                         lambdarank.lambda_i,
                         lambdarank.t,
-                        lambdarank.tt
+                        lambdarank.tt,
+                        lambdarank.ttt
                         ],
                        feed_dict={
                            lambdarank.X:X,
@@ -98,11 +99,12 @@ with tf.Session() as sess:
             print "X:\n", debug_X
             print "Y:\n", debug_Y
             print "y:\n", debug_y
-#            print "sigma_ij:\n", debug_sigma_ij
-#            print "Sij:\n", debug_Sij
-#            print "lambda_ij:\n", debug_lambda_ij
-#            print "lambda_i:\n", debug_lambda_i
+            print "sigma_ij:\n", debug_sigma_ij
+            print "Sij:\n", debug_Sij
+            print "lambda_ij:\n", debug_lambda_ij
+            print "lambda_i:\n", debug_lambda_i
             print "t:\n", debug_t
-            print "t:\n", debug_tt
+            print "tt:\n", debug_tt
+            print "ttt:\n", debug_ttt
     save_path = saver.save(sess, config.MODEL_PATH)
     print("Model saved in file: %s" % save_path)

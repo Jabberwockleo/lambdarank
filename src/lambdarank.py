@@ -15,6 +15,11 @@ Date: 2017/11/27 10:41:01
 import tensorflow as tf
 import config
 
+with tf.name_scope("debug"):
+    t = tf.constant(0) # debug variable
+    tt = tf.constant(0) # debug variable
+    ttt = tf.constant(0) # debug variable
+
 weights = {
         "hidden": tf.Variable(tf.random_normal(
             [config.FEATURE_NUM, config.LAYER_WIDTH]), name="W_hidden"),
@@ -95,7 +100,12 @@ with tf.name_scope("matrices"):
     # lambda_ij = dCij/ds_i = 1/2 * (1 - Sij) * dsigma(s_i - s_j)/d(s_i - s_j) * 1
     #    - (dsigma(s_i - s_j)/d(s_i - s_j) * 1) / (1 + e^(sigma_ij))
     # here we assign sigma = Identity, thus dsigma/d(si - sj) = 1
-    lambda_ij = 1.0 / 2.0 * (1 - Sij) - 1.0 / (1 + tf.exp(sigma_ij))
+    # thus lambda_ij = 1.0 / 2.0 * (1 - Sij) - 1.0 / (1 + tf.exp(sigma_ij))
+    # but tf.exp may have numerical precision issue
+    # comforming to sigma_ij + sigma_ji = 0, lambda_ij + lambda_ji = 0
+    # use the reformulation exp(-x) = exp(log(1 + exp(-|x|)) - min(0, x)) - 1
+    lambda_ij = 1.0 / 2.0 * (1 - Sij) - 1.0 / \
+        tf.exp(tf.log(1 + tf.exp(-tf.abs(-sigma_ij))) - tf.minimum(0.0, -sigma_ij))
 
     # the cost matrix
     # Cij = −P ̄ijoij + log(1 + eoij) = (1 − P ̄ij)oij + log(1 + e−oij)
@@ -110,62 +120,62 @@ with tf.name_scope("matrices"):
     # which is factorized as lambda_i = \sum_{if Sij = 1}{lambda_ij} -
     #    \sum_{if Sji = 1}{lambda_ji}
     ij_positive_label_mat = tf.maximum(Sij, 0) #Mij = 1 if (i, j) \in P
-    ij_sum_mat = ij_positive_label_mat * lambda_ij
-    ij_sum = tf.reduce_sum(ij_sum_mat, [1])
-    ji_sum = tf.reduce_sum(ij_sum_mat, [0])
+    ij_positive_mat = ij_positive_label_mat * lambda_ij
+    ij_sum = tf.reduce_sum(ij_positive_mat, [1])
+    ji_sum = tf.reduce_sum(ij_positive_mat, [0])
     lambda_i = ij_sum - ji_sum #lambda_i for \sum_{i}dCij/dsi - \sum_{i}dCji/dsj
 
 with tf.name_scope("train_op"):
-    t = tf.constant(0) # debug variable
-    tt = tf.constant(0) # debug variable
     loss = tf.reduce_mean(Cij)
-    if config.QUALITY_MEASURE == config.NO_LAMBDA_MEASURE_USING_SGD:
-        train_op = tf.train.GradientDescentOptimizer(
-            config.LEARNING_RATE).minimize(loss)
-    elif config.QUALITY_MEASURE == config.LAMBDA_MEASURE_AUC:
-        # unpack X on dimension 0 and computes gradients w.r.t x_i,
-        # resulting on a tensor R with R.shape[0] = X.shape[0]
-        # because tf.gradients(Y, X) computes sum_{k} dy_k/dx_i
-        # we want ds_i/dw_k, i.e. dg(x_i)/dw_k
-        # thus we need to compute s_i and w_k respectively
-        def make_dsi_dwk_closure(w_k):
-            """Make a closure w.r.t wk
+    # flatten params of layer params
+    layer_params = graph_params()
+    wk_arr = [wk for w_b in layer_params for wk in w_b]
+
+    # unpack X on dimension 0 and computes gradients w.r.t x_i,
+    # resulting on a tensor R with R.shape[0] = X.shape[0]
+    # because tf.gradients(Y, X) computes sum_{k} dy_k/dx_i
+    # we want ds_i/dw_k, i.e. dg(x_i)/dw_k
+    # thus we need to compute s_i and w_k respectively
+    def make_dsi_dwk_closure(w_k):
+        """Make a closure w.r.t wk
+
+        Args:
+            w_k: respected to which gradient is computed
+        Returns:
+            a function passed to tf.map_fn() which accept x_i
+        """
+        def compute_dsi_dwk(x_i):
+            """Compute gradient of graph(x_i) w.r.t w_k
 
             Args:
-                w_k: respected to which gradient is computed
+                x_i: single input feature vector
             Returns:
-                a function passed to tf.map_fn() which accept x_i
+                a single tensor representing gradient ds_i/dw_k
             """
-            def compute_dsi_dwk(x_i):
-                """Compute gradient of graph(x_i) w.r.t w_k
+            xi_mat = tf.expand_dims(x_i, 0)
+            return tf.gradients(compute_graph(xi_mat), [w_k])[0]
+        return compute_dsi_dwk
 
-                Args:
-                    x_i: single input feature vector
-                Returns:
-                    a single tensor representing gradient ds_i/dw_k
-                """
-                xi_mat = tf.expand_dims(x_i, 0)
-                return tf.gradients(compute_graph(xi_mat), [w_k])[0]
-            return compute_dsi_dwk
+    # computes [None, gradient] matrix of ds_i/dw_k
+    def compute_ds_dwk(w_k):
+        """Compute [ds_1/dw_k, ds_2/dw_k, ..] mat
 
+        Args:
+            w_k: a node param to compute
+        Returns:
+            a [None, gradient] tensor
+        """
+        dsi_dwk_mat = tf.map_fn(make_dsi_dwk_closure(w_k), X)
+        return dsi_dwk_mat
 
-        # flatten params of layer params
-        layer_params = graph_params()
-        wk_arr = [wk for w_b in layer_params for wk in w_b]
+    def compute_dC_dwk(lambda_i):
+        """Compute gradients dC/dw_k
 
-        # computes [None, gradient] matrix of ds_i/dw_k
-        def compute_ds_dwk(w_k):
-            """Compute [ds_1/dw_k, ds_2/dw_k, ..] mat
-
-            Args:
-                w_k: a node param to compute
-            Returns:
-                a [None, gradient] tensor
-            """
-            dsi_dwk_mat = tf.map_fn(make_dsi_dwk_closure(w_k), X)
-            return dsi_dwk_mat
-
-        # compute gradients dC/dw_k
+        Args:
+            lambda_i: computed lambda coefficients
+        Returns:
+            array of dC/dwk gradients
+        """
         dC_dwk_arr = []
         for wk in wk_arr:
             # ds_dwk for hidden layer param shaped [N, feature_num, layer_width]
@@ -176,6 +186,14 @@ with tf.name_scope("train_op"):
                     (ds_dwk, tf.expand_dims(lambda_i, 1)), dtype=tf.float32)
             dC_dwk = tf.reduce_sum(lambdai_dsi_dwk, axis=[0])
             dC_dwk_arr.append(dC_dwk)
+        return dC_dwk_arr
+
+    if config.QUALITY_MEASURE == config.NO_LAMBDA_MEASURE_USING_SGD:
+        train_op = tf.train.GradientDescentOptimizer(
+            config.LEARNING_RATE).minimize(loss)
+    elif config.QUALITY_MEASURE == config.LAMBDA_MEASURE_AUC:
+        # compute gradients dC/dw_k
+        dC_dwk_arr = compute_dC_dwk(lambda_i)
 
         # flattened
         flat_wk = wk_arr[:]
@@ -188,27 +206,67 @@ with tf.name_scope("train_op"):
             )
         pass
     elif config.QUALITY_MEASURE == config.LAMBDA_MEASURE_NDCG:
-        # TODO
-        relevance = tf.maximum(Y, 0)
-        relevance_sort = tf.maximum(Y_sort, 0)
-        ranks = tf.cast(tf.range(1, tf.shape(Y)[0] + 1, 1), dtype=tf.float32)
-        ranks = tf.expand_dims(ranks, [1]) # column vector
+        relevance = tf.maximum(Y, 0) # negative label normalize to 0
+        relevance_sort = tf.maximum(Y_sort, 0) # ideal result sequence
+        ranks_sort_r = tf.cast(tf.range(1, tf.shape(Y)[0] + 1, 1), dtype=tf.float32) # [1, 2, ..]
+        ranks_sort = tf.expand_dims(ranks_sort_r, [1]) # column vector
+        y_r = tf.squeeze(y) # row vector (1-D tensor)
+        y_indices_sort = tf.nn.top_k(y_r, k=tf.shape(y_r)[0]).indices
+        ranks_compute = tf.gather(ranks_sort, y_indices_sort)
 
         # DCG(t) = \sum^(t)_{1}
         def log2(x):
             """Compute log(x)/log(2)
             """
             return tf.log(x)/tf.log(tf.constant(2.0))
-        dcg = (2 ** relevance - 1) / log2(ranks + 1)
-        dcg = tf.reduce_sum(dcg)
-        max_dcg =(2 ** relevance_sort - 1) / log2(ranks + 1)
-        max_dcg = tf.reduce_sum(max_dcg)
+        # current DCG
+        dcg_each = (2 ** relevance - 1) / log2(ranks_compute + 1)
+        dcg = tf.reduce_sum(dcg_each)
+        # ideal DCG
+        max_dcg_each =(2 ** relevance_sort - 1) / log2(ranks_sort + 1)
+        max_dcg = tf.reduce_sum(max_dcg_each)
+        # |\Delta NDCG| matrix by swapping each i, j rank position pair
+        # denoted li = relavance of i, ri = rank of i, lirj = 2^(li)/lg2(rj + 1)
+        # [l1r1 l1r1 l1r1
+        #  l2r2 l2r2 l2r2
+        #  l3r3 l3r3 l3r3]
+        dcg_each_col_tile = tf.tile(dcg_each, [1, tf.shape(y)[0]])
+        # [l1r1 l2r2 l3r3
+        #  l1r1 l2r2 l3r3
+        #  l1r1 l2r2 l3r3]
+        dcg_each_row_tile = tf.tile(tf.transpose(dcg_each), [tf.shape(y)[0], 1])
+        # [l1r1 l1r2 l1r3
+        #  l2r1 l2r2 l2r3
+        #  l3r1 l3r2 l3r3]
+        dcg_swap_col = (2 ** relevance - 1) / log2(tf.transpose(ranks_compute) + 1)
+        # [l1r1 l2r1 l3r1
+        #  l1r2 l2r2 l3r2
+        #  l1r3 l2r3 l3r3]
+        dcg_swap_row = tf.transpose(dcg_swap_col)
+        delta_dcg = 0 - dcg_each_col_tile - dcg_each_row_tile + dcg_swap_col + dcg_swap_row
 
-        t = dcg
-        tt = max_dcg
+        # the objective function of NDCG is not the cost C to minimize, but instead the
+        # another gain function to maximize. The lambda_ij of the cost C to
+        # minimize becomes
+        lambda_ij_objective = lambda_ij * tf.abs(delta_dcg)
 
-        # mock
+        # lambda_i becomes
+        ij_positive_label_mat = tf.maximum(Sij, 0) # Mij = 1 if (i, j) \in P
+        ij_positive_mat_objective = ij_positive_label_mat * lambda_ij_objective
+        ij_sum_objective = tf.reduce_sum(ij_positive_mat_objective, [1])
+        ji_sum_objective = tf.reduce_sum(ij_positive_mat_objective, [0])
+        lambda_i_objective = ij_sum_objective - ji_sum_objective
+
+        # compute gradients dC/dw_k
+        dC_dwk_arr = compute_dC_dwk(lambda_i_objective)
+
+        # flattened
+        flat_wk = wk_arr[:]
+        flat_grad = dC_dwk_arr[:]
+
+        # apply gradients
         train_op = tf.train.GradientDescentOptimizer(
-            config.LEARNING_RATE).minimize(loss)
+            config.LEARNING_RATE).apply_gradients(
+                [(gr, wk) for gr, wk in zip(flat_grad, flat_wk)]
+            )
         pass
-
