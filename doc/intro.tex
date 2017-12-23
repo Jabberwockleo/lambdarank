@@ -88,6 +88,13 @@ Simply factorize $\lambda_i$ is the basic version of LambdaRank.
 By replacing $\lambda_i$ with other quality measure (such as NDCG) gives the extended version of LambdaRank.
 
 
+Note: the optimization target of objective function $C$ of other quality measures such as NDCG, is not to minimize the $C$ (cost function for RankNet), but to maximize it. And empirically take such form:
+
+\startformula
+\lambda_{ij} = \frac{\partial C(s_i - s_j)}{\partial s_i} = \frac{-\sigma}{1+e^{\sigma(s_i - s_j)}} |\Delta_{\text{NDCG}}|
+\stopformula
+
+
 By both modeling $\lambda_i$ and $\frac{\partial s_i}{\partial w_k}$ such as GBDT gives the LambdaRank variants such as LambdaMART.
 
 \subject{Algorithm}
