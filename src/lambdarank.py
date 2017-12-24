@@ -80,6 +80,7 @@ with tf.name_scope("mlp"):
         return y
 
 with tf.name_scope("matrices"):
+    identity_mat = tf.diag(tf.ones(tf.shape(tf.squeeze(Y)), dtype=tf.int32))
     y = compute_graph(X)
     # score diff matrix with shape [doc_count, doc_count]
     # sigma_ij = matrix of sigma(s_i - s_j)
@@ -211,8 +212,22 @@ with tf.name_scope("train_op"):
         ranks_sort_r = tf.cast(tf.range(1, tf.shape(Y)[0] + 1, 1), dtype=tf.float32) # [1, 2, ..]
         ranks_sort = tf.expand_dims(ranks_sort_r, [1]) # column vector
         y_r = tf.squeeze(y) # row vector (1-D tensor)
+        # y_indices_sort[i] = j means doc j ranks i
         y_indices_sort = tf.nn.top_k(y_r, k=tf.shape(y_r)[0]).indices
-        ranks_compute = tf.gather(ranks_sort, y_indices_sort)
+        def gen_mask_tensor(x):
+            """Generate mask tensor
+
+            Args:
+                x: location 1-D tensor
+            Return:
+                1-D tensor [0, 0, .. ,1, .., 0] with index x set to 1
+            """
+            return tf.gather(identity_mat, tf.squeeze(x))
+        idx_to_rank_mat = tf.map_fn(gen_mask_tensor, tf.expand_dims(y_indices_sort, [1]))
+        # ranks_compute[i] = j means the document ranks i is doc j
+        # i.e. reverse mapping of y_indices_sort
+        ranks_compute_r = tf.reduce_sum(ranks_sort * tf.cast(idx_to_rank_mat, dtype=tf.float32), axis=[0])
+        ranks_compute = tf.expand_dims(ranks_compute_r, [1])
 
         # DCG(t) = \sum^(t)_{1}
         def log2(x):
@@ -244,11 +259,14 @@ with tf.name_scope("train_op"):
         #  l1r3 l2r3 l3r3]
         dcg_swap_row = tf.transpose(dcg_swap_col)
         delta_dcg = 0 - dcg_each_col_tile - dcg_each_row_tile + dcg_swap_col + dcg_swap_row
+        delta_ndcg = delta_dcg / max_dcg
 
         # the objective function of NDCG is not the cost C to minimize, but instead the
-        # another gain function to maximize. The lambda_ij of the cost C to
-        # minimize becomes
-        lambda_ij_objective = lambda_ij * tf.abs(delta_dcg)
+        #     another gain function to maximize.
+        # dCij/dsi holds the direction and pairwise amount to adjust dsi/dwk,
+        #     by multiply the absolute objective function change amount |\delta_{NDCG}|
+        # The lambda_ij for the cost C to minimize becomes
+        lambda_ij_objective = lambda_ij * tf.abs(delta_ndcg)
 
         # lambda_i becomes
         ij_positive_label_mat = tf.maximum(Sij, 0) # Mij = 1 if (i, j) \in P
