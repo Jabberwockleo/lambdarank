@@ -12,16 +12,14 @@ Author: Wan Li
 Date: 2017/11/27 10:41:01
 """
 
-LAMBDA_MEASURE_MRR = "mean_reciprocal_rank"
-LAMBDA_MEASURE_MAP = "mean_average_precision"
-LAMBDA_MEASURE_MAP = "expected_reciprocal_rank"
-LAMBDA_MEASURE_NDCG = "normalized_discounted_cumulative_gain"
-LAMBDA_MEASURE_AUC = "factorized_pairwise_precision"
 NO_LAMBDA_MEASURE_USING_SGD = "pure_sgd"
+LAMBDA_MEASURE_AUC = "factorized_pairwise_precision"
+LAMBDA_MEASURE_NDCG = "normalized_discounted_cumulative_gain"
+#LAMBDA_MEASURE_MRR = "mean_reciprocal_rank"
+#LAMBDA_MEASURE_MAP = "mean_average_precision"
+#LAMBDA_MEASURE_ERR = "expected_reciprocal_rank"
 
 DEBUG_LOG = True
-#QUALITY_MEASURE = NO_LAMBDA_MEASURE_USING_SGD
-#QUALITY_MEASURE = LAMBDA_MEASURE_AUC
 QUALITY_MEASURE = LAMBDA_MEASURE_NDCG
 USE_HIDDEN_LAYER = True
 USE_TOY_DATA = True
