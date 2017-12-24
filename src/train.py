@@ -61,11 +61,9 @@ with tf.Session() as sess:
         doc_list = train_data[key]
         # convert to graph input structure
         X, Y = convert_np_data(doc_list)
-        Y_sort = np.sort(Y, axis=0)[::-1]
         sess.run(lambdarank.train_op, feed_dict={
             lambdarank.X:X,
             lambdarank.Y:Y,
-            lambdarank.Y_sort:Y_sort
         })
         if epoch % 100 == 0:
             loss, \
@@ -88,7 +86,6 @@ with tf.Session() as sess:
                        feed_dict={
                            lambdarank.X:X,
                            lambdarank.Y:Y,
-                           lambdarank.Y_sort:Y_sort
                        })
             print "-- epoch[%d] loss[%f] -- " % (
                 epoch,

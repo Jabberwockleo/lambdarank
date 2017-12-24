@@ -37,7 +37,6 @@ with tf.name_scope("mlp"):
     with tf.name_scope("input"):
         X = tf.placeholder(tf.float32, [None, config.FEATURE_NUM], name="X")
         Y = tf.placeholder(tf.float32, [None, 1], name="Y")
-        Y_sort = tf.placeholder(tf.float32, [None, 1], name="Y_sort")
 
     def graph_params():
         """Get layer params in array
@@ -208,6 +207,9 @@ with tf.name_scope("train_op"):
         pass
     elif config.QUALITY_MEASURE == config.LAMBDA_MEASURE_NDCG:
         relevance = tf.maximum(Y, 0) # negative label normalize to 0
+        Y_r = tf.squeeze(Y)
+        Y_sort_r = tf.nn.top_k(Y_r, k=tf.shape(Y_r)[0]).values
+        Y_sort = tf.expand_dims(Y_sort_r, [1])
         relevance_sort = tf.maximum(Y_sort, 0) # ideal result sequence
         ranks_sort_r = tf.cast(tf.range(1, tf.shape(Y)[0] + 1, 1), dtype=tf.float32) # [1, 2, ..]
         ranks_sort = tf.expand_dims(ranks_sort_r, [1]) # column vector
